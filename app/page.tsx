@@ -381,76 +381,45 @@ export default function PetTapGame() {
   }
 
   /* -------------------- CHARACTER SELECT -------------------- */
-  const CharacterSelect = () => (
+  // --- replace your CharacterSelect with this ---
+const CharacterSelect = () => {
+  const choices: { key: Character; label: string }[] = [
+    { key: "dog", label: "Poodle" },
+    { key: "cat", label: "Cat" },
+    { key: "beagle", label: "Beagle" },
+    { key: "husky", label: "Husky" },
+  ]
+
+  return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-orange-300 via-orange-400 to-amber-400 p-4 relative overflow-hidden">
       <FloatingElements />
       <SoundToggles />
+
       <div className="text-center space-y-8 bounce-in relative z-10">
         <h2 className="text-5xl font-black text-purple-800 chunky-title">Choose Your Pet</h2>
+
         <div className="grid grid-cols-2 gap-6 justify-center max-w-md">
-          <Card
-            className={`p-6 transition-all hover:scale-105 bg-white/20 border-2 ${
-              selectedCharacter === "dog" ? "ring-4 ring-purple-600 bg-white/40 border-purple-600" : "border-orange-300"
-            }`}
-            onClick={() => {
-              setSelectedCharacter("dog")
-              playClick()
-            }}
-          >
-            <div className="text-center space-y-3">
-              <img src="/images/dog.png" alt="Poodle" className="w-20 h-20 object-contain mx-auto" />
-              <h3 className="text-xl font-bold text-purple-800">Poodle</h3>
-            </div>
-          </Card>
-
-          <Card
-            className={`p-6 transition-all hover:scale-105 bg-white/20 border-2 ${
-              selectedCharacter === "cat" ? "ring-4 ring-purple-600 bg-white/40 border-purple-600" : "border-orange-300"
-            }`}
-            onClick={() => {
-              setSelectedCharacter("cat")
-              playClick()
-            }}
-          >
-            <div className="text-center space-y-3">
-              <img src="/images/cat.png" alt="Cat" className="w-20 h-20 object-contain mx-auto" />
-              <h3 className="text-xl font-bold text-purple-800">Cat</h3>
-            </div>
-          </Card>
-
-          <Card
-            className={`p-6 transition-all hover:scale-105 bg-white/20 border-2 ${
-              selectedCharacter === "beagle"
-                ? "ring-4 ring-purple-600 bg-white/40 border-purple-600"
-                : "border-orange-300"
-            }`}
-            onClick={() => {
-              setSelectedCharacter("beagle")
-              playClick()
-            }}
-          >
-            <div className="text-center space-y-3">
-              <img src="/images/beagle.png" alt="Beagle" className="w-20 h-20 object-contain mx-auto" />
-              <h3 className="text-xl font-bold text-purple-800">Beagle</h3>
-            </div>
-          </Card>
-
-          <Card
-            className={`p-6 transition-all hover:scale-105 bg-white/20 border-2 ${
-              selectedCharacter === "husky"
-                ? "ring-4 ring-purple-600 bg-white/40 border-purple-600"
-                : "border-orange-300"
-            }`}
-            onClick={() => {
-              setSelectedCharacter("husky")
-              playClick()
-            }}
-          >
-            <div className="text-center space-y-3">
-              <img src="/images/husky.png" alt="Husky" className="w-20 h-20 object-contain mx-auto" />
-              <h3 className="text-xl font-bold text-purple-800">Husky</h3>
-            </div>
-          </Card>
+          {choices.map(({ key, label }) => (
+            <Card
+              key={key}
+              onClick={() => {
+                setSelectedCharacter(key)
+                // if you have playClick in scope:
+                try { (playClick as any)?.() } catch {}
+              }}
+              className={`p-6 transition-all hover:scale-105 bg-white/20 border-2 cursor-pointer
+                ${selectedCharacter === key ? "ring-4 ring-purple-600 bg-white/40 border-purple-600" : "border-orange-300"}`}
+            >
+              <div className="text-center space-y-3">
+                <img
+                  src={getCharacterImage(key)}
+                  alt={label}
+                  className="w-20 h-20 object-contain mx-auto"
+                />
+                <h3 className="text-xl font-bold text-purple-800">{label}</h3>
+              </div>
+            </Card>
+          ))}
         </div>
 
         <Button
@@ -464,6 +433,7 @@ export default function PetTapGame() {
       </div>
     </div>
   )
+}
 
   /* -------------------- GAME (used for playing & countdown background) -------------------- */
   const GameScreen = ({ isCountdown }: { isCountdown: boolean }) => {
