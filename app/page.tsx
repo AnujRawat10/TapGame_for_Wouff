@@ -200,7 +200,7 @@ export default function PetTapGame() {
   )
 
   const getCharacterImage = (c: Character) =>
-    c === "dog" ? "/images/dog.png" : c === "cat" ? "/images/cat.png" : c === "beagle" ? "/images/beagle.png" : "/images/husky.png"
+    c === "dog" ? "/images/Dog.png" : c === "cat" ? "/images/Cat.png" : c === "beagle" ? "/images/Beagle.png" : "/images/Husky.png"
 
   const getCharacterName = (c: Character) =>
     c === "dog" ? "Poodle" : c === "cat" ? "Cat" : c === "beagle" ? "Beagle" : "Husky"
@@ -560,9 +560,9 @@ export default function PetTapGame() {
           <div className="bg-white rounded-full px-6 py-2 flex items-center space-x-4 shadow-lg">
             <span className="text-sm font-bold text-purple-800">YOUR AGENCY</span>
             <div className="w-px h-4 bg-gray-300" />
-            <img src="/images/instagram-logo.jpeg" alt="Instagram" className="w-5 h-5 rounded" />
+            <img src="/images/Instagram.png" alt="Instagram" className="w-5 h-5 rounded" />
             <div className="w-px h-4 bg-gray-300" />
-            <img src="/images/linkedin-logo.jpeg" alt="LinkedIn" className="w-5 h-5 rounded" />
+            <img src="/images/linkedin.webp" alt="LinkedIn" className="w-5 h-5 rounded" />
           </div>
         </div>
       </div>
@@ -635,9 +635,9 @@ export default function PetTapGame() {
         <div className="bg-white rounded-full px-6 py-2 flex items-center space-x-4 shadow-lg">
           <span className="text-sm font-bold text-purple-800">DELHI DIGITAL COMPANY</span>
           <div className="w-px h-4 bg-gray-300" />
-          <img src="/images/instagram-logo.jpeg" alt="Instagram" className="w-5 h-5 rounded" />
+          <img src="/images/Instagram.png" alt="Instagram" className="w-5 h-5 rounded" />
           <div className="w-px h-4 bg-gray-300" />
-          <img src="/images/linkedin-logo.jpeg" alt="LinkedIn" className="w-5 h-5 rounded" />
+          <img src="/images/linkedin.webp" alt="LinkedIn" className="w-5 h-5 rounded" />
         </div>
       </div>
     </div>
