@@ -27,13 +27,24 @@ const BTN_PRIMARY =
 
 const MEGA_INTERVAL = 10
 const MEGA_BONUS = 100
-const LEVEL_POINTS = 1000 // every 1000 points = +1 level
-const DOG_GIF_PATH = "/images/DogTap.gif" // <-- put your GIF here
-const DOG_STATIC_PATH = "/images/Dog.png"
+const LEVEL_POINTS = 1000
+
+// Dog uses GIF + matching static (first frame)
+const DOG_GIF_PATH = "/images/dog.gif"
+const DOG_STATIC_PATH = "/images/dog-static.png"
+
+// Decorative GIFs around the UI
+const PET_GIFS: Record<Character, string> = {
+  dog: "/images/dog.gif",
+  cat: "/images/cat.gif",
+  beagle: "/images/beagle.gif",
+  husky: "/images/husky.gif",
+}
 
 export default function PetTapGame() {
   const [gameState, setGameState] = useState<GameState>("menu")
   const [selectedCharacter, setSelectedCharacter] = useState<Character>("dog")
+
   const [score, setScore] = useState(0)
   const [timeLeft, setTimeLeft] = useState(30)
   const [highScore, setHighScore] = useState(0)
@@ -43,12 +54,16 @@ export default function PetTapGame() {
   const [showStartButton, setShowStartButton] = useState(false)
 
   const [level, setLevel] = useState(1)
+
+  // Mega Squish (press-to-claim)
+  const [nextMegaAt, setNextMegaAt] = useState<number>(MEGA_INTERVAL)
+  const [megaReady, setMegaReady] = useState<boolean>(false)
   const [megaFlash, setMegaFlash] = useState<null | { x: number; y: number; bonus: number }>(null)
 
-  // dog GIF control
+  // Dog GIF control in gameplay (tap -> animate)
   const [dogAnimating, setDogAnimating] = useState(false)
 
-  // Countdown (Instruction → 3 → 2 → 1 → LET'S GO!!)
+  // Countdown overlay
   const [countdownValue, setCountdownValue] = useState<string | number | null>(null)
 
   const characters: Character[] = ["dog", "cat", "beagle", "husky"]
@@ -99,7 +114,7 @@ export default function PetTapGame() {
     }
   }, [gameState, isLoading])
 
-  // music on/off
+  /* ------------ MUSIC / SFX PERSIST ------------ */
   useEffect(() => {
     localStorage.setItem("pet-tap-sound", soundOn ? "on" : "off")
     const a = bgmRef.current
@@ -109,7 +124,6 @@ export default function PetTapGame() {
     else a.pause()
   }, [soundOn])
 
-  // sfx on/off
   useEffect(() => {
     localStorage.setItem("pet-tap-sfx", sfxOn ? "on" : "off")
   }, [sfxOn])
@@ -124,7 +138,7 @@ export default function PetTapGame() {
     }
   }, [gameState, timeLeft])
 
-  /* ------------ MARQUEE (smooth transform) ------------ */
+  /* ------------ MARQUEE SPEED ------------ */
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [marqueeDur, setMarqueeDur] = useState<number>(12)
   const MARQUEE_SPEED_PX = 140
@@ -150,6 +164,8 @@ export default function PetTapGame() {
     setTapCount(0)
     setScorePopups([])
     setLevel(1)
+    setNextMegaAt(MEGA_INTERVAL)
+    setMegaReady(false)
     if (soundOn) bgmRef.current?.play().catch(() => {})
     setGameState("countdown")
   }
@@ -183,6 +199,8 @@ export default function PetTapGame() {
     setTapCount(0)
     setScorePopups([])
     setLevel(1)
+    setNextMegaAt(MEGA_INTERVAL)
+    setMegaReady(false)
     setGameState("character-select")
   }
 
@@ -193,13 +211,17 @@ export default function PetTapGame() {
     setGameState("menu")
   }
 
-  // level up as score changes
+  /* ------------ LEVEL & MEGA READY ------------ */
   useEffect(() => {
     const newLevel = Math.floor(score / LEVEL_POINTS) + 1
     if (newLevel !== level) setLevel(newLevel)
   }, [score, level])
 
-  // precise +points at click; also play tap SFX
+  useEffect(() => {
+    if (!megaReady && tapCount >= nextMegaAt) setMegaReady(true)
+  }, [tapCount, nextMegaAt, megaReady])
+
+  /* ------------ TAPPING ------------ */
   const handleTap = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (gameState !== "playing") return
@@ -209,40 +231,66 @@ export default function PetTapGame() {
 
       playTap()
 
-      // animate dog GIF only for 'dog'
       if (selectedCharacter === "dog") {
         setDogAnimating(true)
-        setTimeout(() => setDogAnimating(false), 700) // adjust to your GIF length
+        setTimeout(() => setDogAnimating(false), 700)
       }
 
       const base = 10 + Math.floor(tapCount / 10) * 5
-      const isMega = (tapCount + 1) % MEGA_INTERVAL === 0
-      const add = base + (isMega ? MEGA_BONUS : 0)
-
-      setScore((p) => p + add)
+      setScore((p) => p + base)
       setTapCount((p) => p + 1)
 
-      // +points popup
       const popup: ScorePopup = { id: Date.now(), x, y, points: base }
       setScorePopups((p) => [...p, popup])
       setTimeout(() => setScorePopups((p) => p.filter((pp) => pp.id !== popup.id)), 800)
-
-      // mega flash
-      if (isMega) {
-        setMegaFlash({ x, y, bonus: MEGA_BONUS })
-        setTimeout(() => setMegaFlash(null), 750)
-      }
     },
     [gameState, tapCount, playTap, selectedCharacter],
   )
 
+  /* ------------ MEGA PRESS ------------ */
+  const pressMega = () => {
+    if (!megaReady || gameState !== "playing") return
+    setScore((p) => p + MEGA_BONUS)
+    setMegaFlash({ x: 80, y: 60, bonus: MEGA_BONUS })
+    setTimeout(() => setMegaFlash(null), 750)
+    setMegaReady(false)
+    setNextMegaAt((prev) => {
+      let next = prev + MEGA_INTERVAL
+      if (tapCount >= next) setMegaReady(true)
+      return next
+    })
+  }
+
+  /* ------------ STATIC IMAGES ------------ */
   const getCharacterImage = (c: Character) =>
     c === "dog" ? DOG_STATIC_PATH : c === "cat" ? "/images/Cat.png" : c === "beagle" ? "/images/Beagle.png" : "/images/Husky.png"
-
   const getCharacterName = (c: Character) =>
     c === "dog" ? "Poodle" : c === "cat" ? "Cat" : c === "beagle" ? "Beagle" : "Husky"
 
-  /* ------------ BACKGROUND FLOATERS (smooth infinite) ------------ */
+  /* ------------ AURORA / GLOW LAYERS ------------ */
+  const NeonAurora = () => (
+    <div className="pointer-events-none absolute inset-0 -z-10">
+      {/* big drifting color blobs */}
+      <div className="absolute -top-24 -left-24 w-[36rem] h-[36rem] bg-[radial-gradient(closest-side,rgba(255,255,255,0.45),transparent_70%)] blur-3xl mix-blend-screen animate-blob" />
+      <div className="absolute -bottom-24 -right-24 w-[36rem] h-[36rem] bg-[radial-gradient(closest-side,rgba(147,51,234,0.45),transparent_70%)] blur-3xl mix-blend-screen animate-blob2" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[28rem] h-[28rem] bg-[radial-gradient(closest-side,rgba(251,191,36,0.35),transparent_70%)] blur-3xl mix-blend-screen animate-blob3" />
+      {/* subtle vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,0,0,0.12))]" />
+      <style jsx>{`
+        @keyframes blob {
+          0%{transform:translate3d(0,0,0) scale(1)}
+          33%{transform:translate3d(20px,-12px,0) scale(1.06)}
+          66%{transform:translate3d(-14px,10px,0) scale(0.97)}
+          100%{transform:translate3d(0,0,0) scale(1)}
+        }
+        .animate-blob{animation:blob 16s ease-in-out infinite}
+        .animate-blob2{animation:blob 18s ease-in-out infinite}
+        .animate-blob3{animation:blob 20s ease-in-out infinite}
+      `}</style>
+    </div>
+  )
+
+  /* ------------ FLOATING STARS (existing) ------------ */
   const FloatingElements = () => (
     <div className="absolute inset-0 pointer-events-none">
       <div className="absolute top-16 left-[12%] text-white text-xl sm:text-2xl animate-drift-1">⭐</div>
@@ -286,10 +334,66 @@ export default function PetTapGame() {
     </div>
   )
 
-  /* ------------ TOP-RIGHT TOGGLES ------------ */
+  /* ------------ AMBIENT PET GIFS ------------ */
+  const AmbientPets = ({ dense = false }: { dense?: boolean }) => (
+    <div className="pointer-events-none absolute inset-0 z-[1]">
+      {/* Each GIF gets a soft glow and gentle float */}
+      <img
+        src={PET_GIFS.dog}
+        alt=""
+        className={`hidden sm:block absolute top-10 left-4 w-20 md:w-28 opacity-80 animate-floatY
+        [filter:drop-shadow(0_0_16px_rgba(255,255,255,0.8))]`}
+      />
+      <img
+        src={PET_GIFS.cat}
+        alt=""
+        className={`absolute bottom-8 left-6 w-16 md:w-24 opacity-80 animate-floatX
+        [filter:drop-shadow(0_0_16px_rgba(255,255,255,0.7))]`}
+      />
+      <img
+        src={PET_GIFS.beagle}
+        alt=""
+        className={`absolute top-24 right-8 w-16 md:w-24 opacity-80 animate-floatY2
+        [filter:drop-shadow(0_0_16px_rgba(255,255,255,0.7))]`}
+      />
+      <img
+        src={PET_GIFS.husky}
+        alt=""
+        className={`hidden ${dense ? "sm:block" : "md:block"} absolute bottom-10 right-6 w-20 md:w-28 opacity-80 animate-floatX2
+        [filter:drop-shadow(0_0_16px_rgba(255,255,255,0.75))]`}
+      />
+
+      <style jsx>{`
+        @keyframes floatY {
+          0%,100% { transform: translateY(0) }
+          50% { transform: translateY(-12px) }
+        }
+        @keyframes floatY2 {
+          0%,100% { transform: translateY(0) }
+          50% { transform: translateY(10px) }
+        }
+        @keyframes floatX {
+          0%,100% { transform: translateX(0) rotate(0.5deg) }
+          50% { transform: translateX(10px) rotate(-0.5deg) }
+        }
+        @keyframes floatX2 {
+          0%,100% { transform: translateX(0) rotate(-0.5deg) }
+          50% { transform: translateX(-10px) rotate(0.5deg) }
+        }
+        .animate-floatY { animation: floatY 6s ease-in-out infinite }
+        .animate-floatY2 { animation: floatY2 7.5s ease-in-out infinite }
+        .animate-floatX { animation: floatX 7s ease-in-out infinite }
+        .animate-floatX2 { animation: floatX2 8s ease-in-out infinite }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-floatY, .animate-floatY2, .animate-floatX, .animate-floatX2 { animation: none }
+        }
+      `}</style>
+    </div>
+  )
+
+  /* ------------ SOUND TOGGLES ------------ */
   const SoundToggles = () => (
     <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-30 flex gap-2 sm:gap-3">
-      {/* Music */}
       <button
         onClick={() => {
           playClick()
@@ -308,7 +412,6 @@ export default function PetTapGame() {
         </div>
       </button>
 
-      {/* SFX */}
       <button
         onClick={() => {
           playClick()
@@ -329,8 +432,15 @@ export default function PetTapGame() {
     const marqueeItems = [...characters, ...characters] as Character[]
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-orange-300 via-orange-400 to-amber-400 p-3 sm:p-4 relative overflow-hidden">
+        <NeonAurora />
+        <AmbientPets dense />
         <FloatingElements />
         <SoundToggles />
+
+        {/* spinning halo ring behind title */}
+        <div className="absolute -z-0 top-10 sm:top-16 left-1/2 -translate-x-1/2 w-[28rem] h-[28rem] opacity-60">
+          <div className="w-full h-full rounded-full bg-[conic-gradient(from_0deg,rgba(255,255,255,0.2),rgba(168,85,247,0.5),rgba(251,191,36,0.3),rgba(255,255,255,0.2))] blur-2xl animate-spin-slow" />
+        </div>
 
         <div className="text-center space-y-6 sm:space-y-8 bounce-in relative z-10">
           <div className="space-y-2 sm:space-y-4">
@@ -342,8 +452,14 @@ export default function PetTapGame() {
             </h2>
           </div>
 
-          {/* Transparent bubble with transform-based marquee */}
-          <div className="relative mx-auto w-[20rem] sm:w-[28rem] md:w-[34rem] h-36 sm:h-44 md:h-48 bg-gradient-to-br from-orange-200/60 to-amber-200/60 rounded-[2rem] sm:rounded-[3rem] border-4 border-orange-300/50 shadow-xl pulse-glow overflow-hidden">
+          {/* marquee bubble */}
+          <div className="relative mx-auto w-[20rem] sm:w-[28rem] md:w-[34rem] h-36 sm:h-44 md:h-48 bg-gradient-to-br from-orange-200/60 to-amber-200/60 rounded-[2rem] sm:rounded-[3rem] border-4 border-orange-300/50 shadow-xl overflow-hidden">
+            {/* glossy shine */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute -top-12 left-0 right-0 h-20 bg-gradient-to-b from-white/40 to-transparent blur-md" />
+              <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-purple-700/10 to-transparent" />
+            </div>
+
             <div className="pointer-events-none absolute inset-0 rounded-[2rem] sm:rounded-[3rem] [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]" />
             <div
               ref={trackRef}
@@ -377,8 +493,11 @@ export default function PetTapGame() {
                 animation-timing-function: linear;
                 animation-iteration-count: infinite;
               }
+              .animate-spin-slow { animation: spin 18s linear infinite; }
+              @keyframes spin { to { transform: rotate(360deg); } }
               @media (prefers-reduced-motion: reduce) {
                 .animate-marquee { animation: none; }
+                .animate-spin-slow { animation: none; }
               }
             `}</style>
           </div>
@@ -403,9 +522,11 @@ export default function PetTapGame() {
                   setGameState("character-select")
                 }}
                 size="lg"
-                className={`${BTN_PRIMARY} text-base sm:text-xl px-8 sm:px-12 py-3 sm:py-4`}
+                className={`${BTN_PRIMARY} text-base sm:text-xl px-8 sm:px-12 py-3 sm:py-4 relative overflow-hidden`}
               >
-                START GAME
+                <span className="relative z-10">START GAME</span>
+                {/* button glow */}
+                <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(closest-side,rgba(255,255,255,0.35),transparent_70%)] blur-md" />
               </Button>
               {highScore > 0 && (
                 <p className="text-base sm:text-lg text-purple-800 font-bold bg-white/20 px-4 py-2 rounded-full">
@@ -430,6 +551,8 @@ export default function PetTapGame() {
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-orange-300 via-orange-400 to-amber-400 px-3 sm:px-4 py-6 relative overflow-hidden">
+        <NeonAurora />
+        <AmbientPets />
         <FloatingElements />
         <SoundToggles />
 
@@ -444,9 +567,11 @@ export default function PetTapGame() {
                   setSelectedCharacter(key)
                   playClick()
                 }}
-                className={`p-4 sm:p-6 transition-all hover:scale-105 bg-white/20 border-2 cursor-pointer
+                className={`p-4 sm:p-6 transition-all hover:scale-105 bg-white/20 border-2 cursor-pointer relative overflow-hidden
                   ${selectedCharacter === key ? "ring-4 ring-purple-600 bg-white/40 border-purple-600" : "border-orange-300"}`}
               >
+                {/* soft corner glow */}
+                <div className="pointer-events-none absolute -right-6 -top-6 w-24 h-24 rounded-full bg-[radial-gradient(closest-side,rgba(255,255,255,0.35),transparent_70%)] blur-md" />
                 <div className="text-center space-y-2 sm:space-3">
                   <img src={getCharacterImage(key)} alt={label} className="w-16 h-16 sm:w-20 sm:h-20 object-contain mx-auto" />
                   <h3 className="text-lg sm:text-xl font-bold text-purple-800">{label}</h3>
@@ -458,21 +583,20 @@ export default function PetTapGame() {
           <Button
             onClick={startGame}
             size="lg"
-            className={`${BTN_PRIMARY} mx-auto text-base sm:text-xl px-8 sm:px-12 py-3 sm:py-4 flex items-center gap-2`}
+            className={`${BTN_PRIMARY} mx-auto text-base sm:text-xl px-8 sm:px-12 py-3 sm:py-4 flex items-center gap-2 relative overflow-hidden`}
           >
-            START PLAYING
-            <span className="text-xl sm:text-2xl">➜</span>
+            <span className="relative z-10">START PLAYING</span><span className="text-xl sm:text-2xl">➜</span>
+            <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(closest-side,rgba(255,255,255,0.25),transparent_70%)] blur-md" />
           </Button>
         </div>
       </div>
     )
   }
 
-  /* -------------------- GAME (for playing & countdown background) -------------------- */
+  /* -------------------- GAME (playing/countdown background) -------------------- */
   const GameScreen = ({ isCountdown }: { isCountdown: boolean }) => {
     const rightTop = String(Math.min(99, Math.floor(tapCount / 10) + 1)).padStart(2, "0")
     const rightMid = String(Math.min(99, Math.floor(tapCount / 25) + 1)).padStart(2, "0")
-
     const levelPadded = String(level).padStart(2, "0")
     const showDogGif = selectedCharacter === "dog" && dogAnimating
 
@@ -482,8 +606,32 @@ export default function PetTapGame() {
           isCountdown ? "blur-[4px] brightness-[0.95]" : ""
         }`}
       >
+        <NeonAurora />
+        <AmbientPets />
         <FloatingElements />
         <SoundToggles />
+
+        {/* MEGA SQUISH BUTTON — left side */}
+        <div className="fixed left-4 sm:left-6 top-1/2 -translate-y-1/2 z-30">
+          <button
+            onClick={pressMega}
+            disabled={!megaReady}
+            className={`${BTN_PRIMARY} px-4 sm:px-6 py-3 sm:py-4 rounded-[2rem] flex items-center gap-2 ${
+              megaReady ? "animate-[pulse_1.1s_ease-in-out_infinite]" : "opacity-50 cursor-not-allowed"
+            }`}
+            aria-label="Mega Squish"
+            title={megaReady ? "MEGA SQUISH ready!" : `Next at ${nextMegaAt} taps`}
+          >
+            <span className="text-lg sm:text-xl">💥</span>
+            <span className={`${luckiest.className} text-base sm:text-lg`}>MEGA SQUISH</span>
+          </button>
+          <style jsx>{`
+            @keyframes pulse {
+              0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,255,255,0.7); }
+              50% { transform: scale(1.04); box-shadow: 0 0 0 10px rgba(255,255,255,0); }
+            }
+          `}</style>
+        </div>
 
         {/* Top-left label */}
         <div className="fixed top-4 left-4 sm:top-6 sm:left-6 z-30">
@@ -511,20 +659,17 @@ export default function PetTapGame() {
             }`}
             onClick={handleTap}
           >
-            {/* Character media (dog can switch to GIF) */}
+            {/* corner glows */}
+            <div className="pointer-events-none absolute -top-10 -left-10 w-40 h-40 rounded-full bg-[radial-gradient(closest-side,rgba(147,51,234,0.24),transparent_70%)] blur-xl" />
+            <div className="pointer-events-none absolute -bottom-10 -right-10 w-44 h-44 rounded-full bg-[radial-gradient(closest-side,rgba(255,255,255,0.26),transparent_70%)] blur-xl" />
+
             <img
-              src={
-                showDogGif
-                  ? DOG_GIF_PATH
-                  : getCharacterImage(selectedCharacter) || "/images/placeholder.svg"
-              }
+              src={showDogGif ? DOG_GIF_PATH : (getCharacterImage(selectedCharacter) || "/images/placeholder.svg")}
               alt={getCharacterName(selectedCharacter)}
-              className={`w-36 h-36 sm:w-48 sm:h-48 object-contain transition-transform duration-150 ${
-                dogAnimating ? "scale-110" : ""
-              }`}
+              className={`w-36 h-36 sm:w-48 sm:h-48 object-contain transition-transform duration-150 ${dogAnimating ? "scale-110" : ""}`}
             />
 
-            {/* Score Popups at click location */}
+            {/* Score popups */}
             {scorePopups.map((popup) => (
               <div
                 key={popup.id}
@@ -541,13 +686,13 @@ export default function PetTapGame() {
               </div>
             ))}
 
-            {/* MEGA SQUISH popup */}
+            {/* Mega flash */}
             {megaFlash && (
               <div
                 className="pointer-events-none absolute font-black text-purple-700 bg-white/90 border-4 border-purple-700 rounded-full px-4 py-2"
                 style={{
-                  left: megaFlash.x,
-                  top: megaFlash.y - 40,
+                  left: "50%",
+                  top: "20%",
                   transform: "translate(-50%, -50%)",
                   animation: "mega-pop 700ms ease-out forwards",
                   whiteSpace: "nowrap",
@@ -573,7 +718,7 @@ export default function PetTapGame() {
           </div>
         </div>
 
-        {/* RIGHT STACK on md+ */}
+        {/* RIGHT STACK (md+) */}
         <aside className="hidden md:block fixed right-6 top-24 z-30 w-[6.5rem] space-y-3">
           <div className="bg-white/80 backdrop-blur rounded-[1.25rem] border-4 border-white ring-2 ring-orange-200 shadow text-center py-2">
             <div className={`${luckiest.className} text-3xl text-purple-800`}>{rightTop}</div>
@@ -590,7 +735,7 @@ export default function PetTapGame() {
           </div>
         </aside>
 
-        {/* MOBILE BOTTOM BAR (stats) */}
+        {/* MOBILE BOTTOM BAR */}
         <div className="md:hidden fixed bottom-20 left-0 right-0 z-30 px-4">
           <div className="mx-auto max-w-md grid grid-cols-3 gap-3">
             <div className="bg-white/90 rounded-xl border-2 border-white text-center py-2 shadow">
@@ -605,7 +750,7 @@ export default function PetTapGame() {
           </div>
         </div>
 
-        {/* COPYRIGHT & SOCIAL (responsive) */}
+        {/* COPYRIGHT & SOCIAL */}
         <div className="fixed bottom-[env(safe-area-inset-bottom)] left-4 sm:left-6 z-30">
           <p className="text-[10px] sm:text-xs text-purple-800 font-bold">©2025 YOUR AGENCY All Rights Reserved</p>
         </div>
@@ -622,11 +767,13 @@ export default function PetTapGame() {
     )
   }
 
-  /* -------------------- GAME OVER (Results) -------------------- */
+  /* -------------------- GAME OVER -------------------- */
   const GameOverScreen = () => {
     const levelPadded = String(level).padStart(2, "0")
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-300 via-orange-400 to-amber-400 relative overflow-hidden">
+        <NeonAurora />
+        <AmbientPets />
         <FloatingElements />
         <SoundToggles />
 
@@ -646,62 +793,33 @@ export default function PetTapGame() {
             <div className="col-span-12 md:col-span-5 space-y-6 order-1">
               <h3
                 className={`${luckiest.className} text-purple-800 text-4xl sm:text-5xl md:text-6xl leading-none`}
-                style={{
-                  WebkitTextStroke: "6px #ffffff",
-                  color: "rgb(91 33 182)",
-                  paintOrder: "stroke fill",
-                }}
+                style={{ WebkitTextStroke: "6px #ffffff", color: "rgb(91 33 182)", paintOrder: "stroke fill" }}
               >
                 SHARE WITH FRIENDS!
               </h3>
 
-              {/* Social buttons row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <a
-                  href="#"
-                  className={`block rounded-[2.5rem] ${BTN_PRIMARY} text-lg sm:text-xl px-6 py-4 sm:px-8 sm:py-6 text-center`}
-                >
-                  Instagram
-                </a>
-                <a
-                  href="#"
-                  className={`block rounded-[2.5rem] ${BTN_PRIMARY} text-lg sm:text-xl px-6 py-4 sm:px-8 sm:py-6 text-center`}
-                >
-                  LinkedIn
-                </a>
+                <a href="#" className={`block rounded-[2.5rem] ${BTN_PRIMARY} text-lg sm:text-xl px-6 py-4 sm:px-8 sm:py-6 text-center`}>Instagram</a>
+                <a href="#" className={`block rounded-[2.5rem] ${BTN_PRIMARY} text-lg sm:text-xl px-6 py-4 sm:px-8 sm:py-6 text-center`}>LinkedIn</a>
               </div>
 
-              {/* Action rows (icons instead of images) */}
+              {/* Action rows */}
               <div className="space-y-6 pt-2">
-                {/* Play again */}
-                <button
-                  onClick={handlePlayAgain}
-                  className="group flex items-center gap-4 sm:gap-6"
-                >
+                <button onClick={handlePlayAgain} className="group flex items-center gap-4 sm:gap-6">
                   <span className={`grid place-items-center rounded-full w-16 h-16 sm:w-20 sm:h-20 ${BTN_PRIMARY}`}>
                     <span className="text-2xl sm:text-3xl">🔁</span>
                   </span>
-                  <span
-                    className={`${luckiest.className} text-2xl sm:text-3xl text-purple-800`}
-                    style={{ WebkitTextStroke: "4px #ffffff", paintOrder: "stroke fill" }}
-                  >
+                  <span className={`${luckiest.className} text-2xl sm:text-3xl text-purple-800`} style={{ WebkitTextStroke: "4px #ffffff", paintOrder: "stroke fill" }}>
                     Play again
                   </span>
                 </button>
 
-                {/* Back to Toy Shelf */}
-                <button
-                  onClick={handleBackToMenu}
-                  className="group flex items-center gap-4 sm:gap-6"
-                >
+                <button onClick={handleBackToMenu} className="group flex items-center gap-4 sm:gap-6">
                   <span className={`grid place-items-center rounded-full w-16 h-16 sm:w-20 sm:h-20 ${BTN_PRIMARY}`}>
                     <span className="text-2xl sm:text-3xl">🧸</span>
                   </span>
-                  <span
-                    className={`${luckiest.className} text-2xl sm:text-3xl text-purple-800`}
-                    style={{ WebkitTextStroke: "4px #ffffff", paintOrder: "stroke fill" }}
-                  >
-                    Back to Toy Shelf
+                  <span className={`${luckiest.className} text-2xl sm:text-3xl text-purple-800`} style={{ WebkitTextStroke: "4px #ffffff", paintOrder: "stroke fill" }}>
+                    Back to Pet Shelf
                   </span>
                 </button>
               </div>
@@ -710,6 +828,8 @@ export default function PetTapGame() {
             {/* CENTER: Score card */}
             <div className="col-span-12 md:col-span-4 order-3 md:order-2 flex justify-center">
               <div className="celebration-card rounded-3xl p-6 sm:p-8 w-full max-w-md relative text-center bg-white/20 backdrop-blur">
+                {/* corner glow */}
+                <div className="pointer-events-none absolute -top-8 -left-8 w-32 h-32 rounded-full bg-[radial-gradient(closest-side,rgba(255,255,255,0.35),transparent_70%)] blur-md" />
                 <img
                   src={getCharacterImage(selectedCharacter) || "/images/placeholder.svg"}
                   alt={getCharacterName(selectedCharacter)}
@@ -769,10 +889,7 @@ export default function PetTapGame() {
           {/* Countdown Overlay */}
           {gameState === "countdown" && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
-              {/* blur layer */}
               <div className="absolute inset-0 bg-black/10 backdrop-blur-[6px]" />
-
-              {/* animated text */}
               <div
                 key={String(countdownValue)}
                 className={`relative z-10 text-white font-extrabold drop-shadow-[0_10px_25px_rgba(0,0,0,0.35)]
